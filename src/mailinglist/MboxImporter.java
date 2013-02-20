@@ -27,21 +27,23 @@ public class MboxImporter {
 
 
     
-    private MessageSaver messageSaver;
+    private DbClient messageSaver;
     private String mboxDirectory;
 
+   
     /**
      * @param args the command line arguments
      */
    
     public static void main(String[] args) throws NoSuchProviderException, MessagingException, IOException {
-        MboxImporter mbox = new MboxImporter(MBOX_DIRECTORY);
+        DbClient msgSaver = new DbClient();
+        MboxImporter mbox = new MboxImporter(MBOX_DIRECTORY,msgSaver);
         mbox.importMbox("sk-linux");
     }
     
-    public MboxImporter(String mboxDirectory) throws UnknownHostException {
+    public MboxImporter(String mboxDirectory,DbClient msgSaver) throws UnknownHostException {
         this.mboxDirectory=mboxDirectory;
-        messageSaver= new MessageSaver();
+        messageSaver= msgSaver;
     }
 
     public  void importMbox(String mboxFile) throws NoSuchProviderException, MessagingException   {
@@ -70,10 +72,12 @@ public class MboxImporter {
         }
         System.out.println("Done.");
     }
-
-    public void setCollection(DBCollection coll) {
-        messageSaver.setCollection(coll);
+    
+     public void setMessageSaver(DbClient messageSaver) {
+        this.messageSaver = messageSaver;
     }
+
+
 
    
 }

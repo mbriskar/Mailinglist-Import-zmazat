@@ -4,11 +4,7 @@
  */
 package mailinglist;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.util.Properties;
 import javax.mail.MessagingException;
 import javax.mail.Session;
@@ -29,8 +25,14 @@ public class MessageReceiver {
         System.out.println("Parsed message:");
         System.out.println("Message ID: " + message.getMessageID());
         System.out.println("Message content: " + message.getContent().toString());
+        DbClient messageSaver;
+        if(args.length == 3) {
+            messageSaver= new DbClient(args[0], args[1], Integer.valueOf(args[2]));
+        } else {
+            messageSaver = new DbClient();
+        }
         
-        MessageSaver messageSaver = new MessageSaver();
+        
         // check if message already not EXIST!
         messageSaver.saveMessage(message);
     }
