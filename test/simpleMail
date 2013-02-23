@@ -64,7 +64,7 @@ Received: from [10.2.88.2] ([195.168.127.122])
  Fri, 23 Sep 2011 08:46:40 -0700 (PDT)
 Message-ID: <4E7CA9DA.9040904@gmail.com>
 Date: Fri, 23 Sep 2011 17:46:34 +0200
-From: Matej B <matej@email.com>
+From: Martin Kyrc <martin.kyrc@gmail.com>
 User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64;
  rv:6.0.2) Gecko/20110902 Thunderbird/6.0.2
 MIME-Version: 1.0
@@ -102,7 +102,29 @@ X-Status:
 X-Keywords:                       
 X-UID: 1
 
-abcabcabc
+ahojte,
+instalujem cistu instalaciu debian 6 z oficialneho zdroja na masinu, =
+
+ktora nepodporuje hw raid. akonahle chcem pocas instalacie vytvorit lvm =
+
+pre ine ako /boot adresare (ci uz v sw raid1, alebo bez sw raidu), =
+
+system nenabootuje. bootloader (grub) zbehne, no system skonci s hlaskou =
+
+'vg not found' (v pripade pouzitia raidu naviac prida 'md not found', =
+
+takze logicky nenajde ani lvm, ktore je postavene nad md).
+
+moja otazka smeruje k tomu, ci je oficialna instalacia (cd1) pouzitelna =
+
+pre tento setup instalacie. kedysi pri instalacii starsich debianov som =
+
+s tym nemal problem. riesim to uz dlho, tak sa reku spytam.
+
+dik za nazor.
+
+--
+mk
 _______________________________________________
 https://lists.linux.sk/mailman/listinfo/linux
 Meta FAQ: http://www.sklug.sk/lists/linux/metafaq.html

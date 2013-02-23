@@ -15,15 +15,15 @@ import com.mongodb.WriteResult;
 import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import javax.mail.Address;
+import java.util.Properties;
 import javax.mail.Message;
 import javax.mail.MessagingException;
 import javax.mail.Multipart;
 import javax.mail.Part;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
+import org.bson.types.ObjectId;
 
 /**
  *
@@ -31,38 +31,44 @@ import javax.mail.internet.MimeMessage;
  */
 public class DbClient {
 
-    private int defaultMongoPort = 27017;
-    private String defaultMongoUrl = "localhost";
-    private String defaultDatabaseName = "test";
+    private static String DATABASE_PROPERTIES_FILE_NAME = "database.properties";
+    private static String MAILINGLISTS_PROPERTIES_FILE_NAME = "mailinglists.properties";
+    List<String> mailingLists;
     DBCollection coll;
 
-    
+    public DbClient() throws UnknownHostException, IOException {
+        Properties prop = new Properties();
+        prop.load(DbClient.class.getClassLoader().getResourceAsStream((DATABASE_PROPERTIES_FILE_NAME)));
+        Integer defaultPort = Integer.valueOf(prop.getProperty("defaultMongoPort"));
+        String databaseUrl = prop.getProperty("defaultMongoUrl");
+        String defaultDatabaseName = prop.getProperty("defaultDatabaseName");
+        String defaultCollectionName = prop.getProperty("defaultCollection");
+        connect(databaseUrl, databaseUrl, defaultPort, defaultCollectionName);
 
-    public DbClient() throws UnknownHostException {
-        MongoClient mongoClient = new MongoClient(defaultMongoUrl, defaultMongoPort);
-        DB db = mongoClient.getDB(defaultDatabaseName);
-        mongoClient.setWriteConcern(WriteConcern.SAFE);
-        coll = db.getCollection("test");
     }
-    
-    public DbClient(String mongoUrl,String databaseName,int mongoPort) throws UnknownHostException {
+
+    public DbClient(String mongoUrl, String databaseName, int mongoPort, String collectionName) throws UnknownHostException {
+        connect(mongoUrl, databaseName, mongoPort, collectionName);
+    }
+
+    private void connect(String mongoUrl, String databaseName, int mongoPort, String collectionName) throws UnknownHostException {
         MongoClient mongoClient = new MongoClient(mongoUrl, mongoPort);
         DB db = mongoClient.getDB(databaseName);
         mongoClient.setWriteConcern(WriteConcern.SAFE);
-        coll = db.getCollection("test");
+        coll = db.getCollection(collectionName);
     }
 
     public boolean saveMessage(Message m) throws MessagingException, IOException {
         MimeMessage mime = (MimeMessage) m;
-        if (containMessage(mime)) {
+        if (getId(mime.getMessageID(),getMailingListAddresses(mime)) != null) {
             return false;
         }
         BasicDBObject doc = new BasicDBObject().
-                append("messageId", mime.getMessageID()).
+                append("message_id", mime.getMessageID()).
                 append("sent", m.getSentDate()).
                 append("received", m.getReceivedDate()).
                 append("subject", m.getSubject());
- 
+
         doc.append("from", m.getFrom()[0].toString());
 
         //getting the body =maincontent + attachements
@@ -82,113 +88,91 @@ public class DbClient {
             doc.append("attachments", attachments);
         }
 
-        // getting others parameters
-        if (m.getReplyTo() != null) {
-            //who do I reply to
-            ArrayList replyToList = new ArrayList();
-            for (Address ad : m.getReplyTo()) {
-                replyToList.add(ad.toString());
-            }
-            doc.append("replyTo", replyToList);
-        }
 
+        List<String> messageMailingList = new ArrayList<>();
         if (m.getAllRecipients() != null) {
-            ArrayList recipientList = new ArrayList();
-            for (InternetAddress ad : (InternetAddress[]) m.getAllRecipients()) {
-                recipientList.add(ad.getAddress());
-            }
-            doc.append("recipients", recipientList);
-        }
 
+            if (mailingLists == null) {
+                getMailingLists();
+            }
+            for (InternetAddress ad : (InternetAddress[]) m.getAllRecipients()) {
+                if (mailingLists.contains(ad.getAddress())) {
+                    messageMailingList.add(ad.getAddress());
+                }
+
+            }
+            doc.append("mailinglist", messageMailingList);
+        }
+        String parentId = "";
         if (m.getHeader("In-Reply-To") != null) {
             //which email is this message replying to
-            doc.append("in-reply-to", m.getHeader("In-Reply-To")[0]);
+            String inReplyToAddress = m.getHeader("In-Reply-To")[0];
+            parentId = getId(inReplyToAddress, messageMailingList);
+            doc.append("in-reply-to", parentId);
+            BasicDBObject parent;
+            if(parentId != null) {
+               parent= (BasicDBObject) coll.findOne(new BasicDBObject("_id", new ObjectId(parentId)));
+            
+            
+            if ( "true".equals(parent.getString("root"))) {
+                doc.append("root", parentId);
+            } else {
+                doc.append("root", doc.getString("root"));
+            } }
+        } else {
+            doc.append("root", "true");
         }
 
         WriteResult result = coll.insert(doc);
+
         if (!result.getLastError().ok()) {
             return false;
         }
 
 
-        if (m.getHeader("In-Reply-To") != null) {
-
-            addReply(mime, coll);
+        if (parentId != null && m.getHeader("In-Reply-To") != null) {
+            BasicDBObject parentObjectParams = new BasicDBObject("_id", new ObjectId(parentId));
+            BasicDBObject docToInsert = new BasicDBObject("id", doc.get("_id"));
+            BasicDBObject updateCommand = new BasicDBObject("$push", new BasicDBObject("replies", docToInsert));
+            coll.update(parentObjectParams, updateCommand);
         }
-        writeMessage(m);
+
         return true;
 
+    }
 
+    public DBCollection getColl() {
+        return coll;
+    }
+
+    // in future maybe in separate objects MailingListManager+ MailingList(if more attributes)
+    public List<String> getMailingLists() throws IOException {
+
+        mailingLists = new ArrayList<String>();
+        Properties prop = new Properties();
+        prop.load(DbClient.class.getClassLoader().getResourceAsStream((MAILINGLISTS_PROPERTIES_FILE_NAME)));
+        String mailinglist = "";
+        int i = 1;
+        while (mailinglist != null) {
+            mailinglist = prop.getProperty("mailinglist." + i);
+            mailingLists.add(mailinglist);
+            i++;
+        }
+
+        return mailingLists;
 
     }
 
-    private boolean containMessage(MimeMessage mime) throws MessagingException {
-        BasicDBObject docToFind = new BasicDBObject();
-        docToFind.put("messageId", mime.getMessageID());
-        DBObject myDoc = coll.findOne(docToFind);
-        if (myDoc != null) {
-            return true;
-        } else {
-            return false;
-        }
 
-    }
-
-    public void writeMessage(Message m) throws MessagingException {
-        MimeMessage mime = (MimeMessage) m;
-
-        if (m.getFrom() != null) {
-        }
-        System.out.println("////////////////////////////////////////");
-        System.out.println(" ID: " + m.getHeader("Message-ID")[0].toString());
-        System.out.println(" Subject: " + mime.getSubject());
-        if (m.getHeader("In-Reply-To") != null) {
-
-            System.out.println(" in reply to " + m.getHeader("In-Reply-To")[0].toString());
-        }
-
-
-        for (Address ad : m.getFrom()) {
-            System.out.println("From: " + ad.toString());
-        }
-
-        System.out.println(" dlzka " + mime.getSize());
-        if (mime.getFlags().getUserFlags().length > 0) {
-            System.out.println(" flags " + (mime.getFlags()).getUserFlags()[0]);
-        }
-
-        if (mime.getFlags().getSystemFlags().length > 0) {
-            System.out.println(" systemflags " + (mime.getFlags()).getSystemFlags()[0]);
-        }
-
+    private List<String> getMailingListAddresses(Message m) throws MessagingException, IOException {
+        ArrayList<String> list = new ArrayList();
+        if(mailingLists == null) {getMailingLists();}
         for (InternetAddress ad : (InternetAddress[]) m.getAllRecipients()) {
-            System.out.println("recipient: " + ad.getAddress());
+            if (mailingLists.contains(ad.getAddress())) {
+                list.add(ad.getAddress());
+            }
         }
-
-
-        for (Address ad : m.getReplyTo()) {
-            System.out.println("reply to " + ad.toString());
-        }
-    }
-
-    //register the email as a "reply" to parent email
-    public void addReply(MimeMessage m, DBCollection coll) throws MessagingException {
-        BasicDBObject whichDocToUpdate = new BasicDBObject();
-        whichDocToUpdate.put("messageId", m.getHeader("In-Reply-To")[0].toString());
-        ArrayList recipientList = new ArrayList();
-        for (InternetAddress ad : (InternetAddress[]) m.getAllRecipients()) {
-            recipientList.add(ad.getAddress());
-        }
-        BasicDBObject recipientQuery = new BasicDBObject("$in", recipientList);
-
-        whichDocToUpdate.put("recipients", recipientQuery);
-
-        BasicDBObject docToInsert = new BasicDBObject("messageId", m.getMessageID());
-        BasicDBObject updateCommand = new BasicDBObject("$push", new BasicDBObject("replies", docToInsert));
-        coll.update(whichDocToUpdate, updateCommand);
-        //example : db.test.update({id:"<1877776408.191361046448968.JavaMail.matej@localhost.localdomain>"}, {"$push":{"replies": {"id":"1"}}})
-
-
+        return list;
     }
 
     private List getText(Part p) throws
@@ -238,19 +222,42 @@ public class DbClient {
         return list;
     }
 
-
     public void dropTable() {
         this.coll.drop();
     }
-    
+
     public long emailCount() {
         return coll.count();
     }
 
     public DBObject findMessageWithMessageId(String messageId) {
-        BasicDBObject idObj = new BasicDBObject("messageId", messageId);
+        BasicDBObject idObj = new BasicDBObject("message_id", messageId);
         return coll.findOne(idObj);
-        
+
+    }
+
+    public List<BasicDBObject> getAllEmails() {
+        DBCursor cursor = coll.find();
+        List<BasicDBObject> objects = new ArrayList<>();
+        try {
+            while (cursor.hasNext()) {
+                objects.add((BasicDBObject)cursor.next());
+            }
+        } finally {
+            cursor.close();
+        }
+        return objects;
+    }
+
+    public String getId(String messageId, List<String> mailinglistOneCommon) {
+        BasicDBObject emailObject = new BasicDBObject("message_id", messageId);
+        BasicDBObject mailingListQuery = new BasicDBObject("$in", mailinglistOneCommon);
+        emailObject.put("mailinglist", mailingListQuery);
+        BasicDBObject findOne = (BasicDBObject) coll.findOne(emailObject);
+        if (findOne == null) {
+            return null;
+        }
+        return findOne.getString("_id");
     }
 
     private class Pair<L, R> {

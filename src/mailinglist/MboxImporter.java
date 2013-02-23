@@ -4,12 +4,10 @@
  */
 package mailinglist;
 
-import com.mongodb.DBCollection;
+import java.io.File;
 import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.Properties;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.mail.Folder;
 import javax.mail.Message;
 import javax.mail.MessagingException;
@@ -23,30 +21,41 @@ import javax.mail.URLName;
  * @author matej
  */
 public class MboxImporter {
-    public static final String MBOX_DIRECTORY = "/home/matej/NetBeansProjects";
 
-
-    
     private DbClient messageSaver;
-    private String mboxDirectory;
 
-   
     /**
      * @param args the command line arguments
      */
-   
     public static void main(String[] args) throws NoSuchProviderException, MessagingException, IOException {
         DbClient msgSaver = new DbClient();
-        MboxImporter mbox = new MboxImporter(MBOX_DIRECTORY,msgSaver);
-        mbox.importMbox("sk-linux");
-    }
-    
-    public MboxImporter(String mboxDirectory,DbClient msgSaver) throws UnknownHostException {
-        this.mboxDirectory=mboxDirectory;
-        messageSaver= msgSaver;
+        MboxImporter mbox = new MboxImporter(msgSaver);
+        File file = new File(args[0]);
+
+        if (args.length == 1) {
+            if (file.isDirectory()) {
+                mbox.importMboxDirectory(args[0]);
+            } else {
+                mbox.importMbox(args[0]);
+            }
+
+        } else {
+            System.out.println("Call the method with one parameter (mbox path)");
+        }
+
     }
 
-    public  void importMbox(String mboxFile) throws NoSuchProviderException, MessagingException   {
+    public MboxImporter(DbClient msgSaver) throws UnknownHostException {
+        messageSaver = msgSaver;
+    }
+
+    private void importMboxDirectory(String string) {
+    }
+
+    public void importMbox(String mboxPath) throws NoSuchProviderException, MessagingException {
+        File file = new File(mboxPath);
+        String mboxFile = file.getName();
+        String mboxDirectory = file.getParentFile().getAbsolutePath();
         Properties props = new Properties();
         props.setProperty("mstor.mbox.metadataStrategy", "none");
         props.setProperty("mail.store.protocol", "mstor");
@@ -56,28 +65,18 @@ public class MboxImporter {
         Session session = Session.getDefaultInstance(props);
         Store store = session.getStore(new URLName("mstor:" + mboxDirectory));
         store.connect();
-
         Folder inbox = store.getDefaultFolder().getFolder(mboxFile);
         inbox.open(Folder.READ_ONLY);
 
         Message[] messages = inbox.getMessages();
-         System.out.println("Importing" +messages.length + "messages.");
-        
+        System.out.println("Importing" + messages.length + "messages.");
+
         for (Message m : messages) {
             try {
                 messageSaver.saveMessage(m);
             } catch (IOException ex) {
-                
             }
         }
         System.out.println("Done.");
     }
-    
-     public void setMessageSaver(DbClient messageSaver) {
-        this.messageSaver = messageSaver;
-    }
-
-
-
-   
 }

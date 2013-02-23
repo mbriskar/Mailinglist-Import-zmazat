@@ -22,18 +22,14 @@ public class MessageReceiver {
         Session s = Session.getDefaultInstance(new Properties());
         MimeMessage message = new MimeMessage(s, System.in);
 
-        System.out.println("Parsed message:");
         System.out.println("Message ID: " + message.getMessageID());
         System.out.println("Message content: " + message.getContent().toString());
         DbClient messageSaver;
-        if(args.length == 3) {
-            messageSaver= new DbClient(args[0], args[1], Integer.valueOf(args[2]));
+        if(args.length == 4) {
+            messageSaver= new DbClient(args[0], args[1], Integer.valueOf(args[2]), args[3]);
         } else {
             messageSaver = new DbClient();
         }
-        
-        
-        // check if message already not EXIST!
         messageSaver.saveMessage(message);
     }
 }
