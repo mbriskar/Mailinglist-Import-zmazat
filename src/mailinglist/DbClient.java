@@ -117,7 +117,7 @@ public class DbClient {
             if ( "true".equals(parent.getString("root"))) {
                 doc.append("root", parentId);
             } else {
-                doc.append("root", doc.getString("root"));
+                doc.append("root", parent.getString("root"));
             } }
         } else {
             doc.append("root", "true");
@@ -175,17 +175,17 @@ public class DbClient {
         return list;
     }
 
-    private List getText(Part p) throws
+    private List<Pair<String, String>> getText(Part p) throws
             MessagingException, IOException {
         List<Pair<String, String>> list = new ArrayList();
         if (p.isMimeType("text/*")) {
-
+            
             String s = (String) p.getContent();
             if (p.isMimeType("text/html")) {
                 list.add(new Pair("text/html", s));
                 return list;
             } else {
-                list.add(new Pair("text/plain", s));
+                 list.add(new Pair("text/plain", s));
                 return list;
             }
 
@@ -198,10 +198,10 @@ public class DbClient {
             for (int i = 0; i < mp.getCount(); i++) {
                 Part bp = mp.getBodyPart(i);
                 if (bp.isMimeType("text/plain")) {
-                    list.add(new Pair("text/plain", bp.getContent().toString()));
+                    list.add(new Pair("alternative_text/plain", bp.getContent().toString()));
 
                 } else if (bp.isMimeType("text/html")) {
-                    list.add(new Pair("text/html", bp.getContent().toString()));
+                    list.add(new Pair("alternative_text/html", bp.getContent().toString()));
 
                 } else {
                     list.addAll(getText(bp));
@@ -230,7 +230,7 @@ public class DbClient {
         return coll.count();
     }
 
-    public DBObject findMessageWithMessageId(String messageId) {
+    public DBObject findFirstMessageWithMessageId(String messageId) {
         BasicDBObject idObj = new BasicDBObject("message_id", messageId);
         return coll.findOne(idObj);
 

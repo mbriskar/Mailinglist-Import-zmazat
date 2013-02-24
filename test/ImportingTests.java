@@ -11,23 +11,23 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
 import java.net.UnknownHostException;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 import java.util.List;
-import javax.mail.Address;
+import java.util.Properties;
 import javax.mail.Message;
 import javax.mail.MessagingException;
 import javax.mail.NoSuchProviderException;
+import javax.mail.Session;
+import javax.mail.internet.AddressException;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
 import mailinglist.MboxImporter;
 import mailinglist.DbClient;
 import mailinglist.MessageReceiver;
 import org.bson.types.BasicBSONList;
-import org.bson.types.ObjectId;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -45,13 +45,13 @@ public class ImportingTests {
     private int mongoPort = 27017;
     private String mongoUrl = "localhost";
     private String databaseName = "testdb";
-    private String collectionName="test";
+    private String collectionName = "test";
 
-    public ImportingTests()   {
+    public ImportingTests() {
     }
 
     @BeforeClass
-    public static void setUpClass()   {
+    public static void setUpClass() {
     }
 
     @AfterClass
@@ -60,7 +60,7 @@ public class ImportingTests {
 
     @Before
     public void setUp() throws UnknownHostException {
-        dbClient = new DbClient(mongoUrl, databaseName, mongoPort,collectionName);
+        dbClient = new DbClient(mongoUrl, databaseName, mongoPort, collectionName);
     }
 
     @After
@@ -76,18 +76,37 @@ public class ImportingTests {
         mbox.importMbox("test/test-mails");
         assertEquals(dbClient.emailCount(), 62);
         writeDBItems();
-        
+
     }
-    
+
+    @Test
+    public void testSaveMessage() throws AddressException, MessagingException {
+        MimeMessage message = new MimeMessage(Session.getDefaultInstance(new Properties()));
+        message.setFrom(new InternetAddress("address"));
+        message.setText("abc");
+        message.addRecipient(Message.RecipientType.TO, new InternetAddress("address"));
+        try {
+            dbClient.saveMessage(message);
+        }catch(IOException ex) {
+            fail();
+        }
+        assertEquals(1, dbClient.emailCount());
+
+    }
+
     private void writeDBItems() {
         List<BasicDBObject> objects = dbClient.getAllEmails();
         for (BasicDBObject email : objects) {
             System.out.println("ID: " + email.getString("_id"));
-             System.out.println("ID: " + email.get("_id"));
-           
+            System.out.println("ID: " + email.get("_id"));
+
             System.out.println("MessageID: " + email.getString("message_id"));
             System.out.println("IN REPLY TO: " + email.getString("in-reply-to"));
             System.out.println("REPLIES: " + email.get("replies"));
+            System.out.println("ROOT: " + email.get("root"));
+            System.out.println("SENT DATE: " + email.get("sent"));
+            System.out.println("MAIN TEXT: " + email.get("mainContent"));
+            System.out.println("ATTACHMENTS: " + email.get("attachments"));
             System.out.println("");
         }
     }
@@ -97,41 +116,63 @@ public class ImportingTests {
         MboxImporter mbox = new MboxImporter(dbClient);
         mbox.importMbox("test/test-mails");
 
-        DBObject testObj = dbClient.findMessageWithMessageId("<4E7CA9DA.9040904@gmail.com>");
+        DBObject testObj = dbClient.findFirstMessageWithMessageId("<4E7CA9DA.9040904@gmail.com>");
         assertTrue((testObj).get("message_id").equals("<4E7CA9DA.9040904@gmail.com>"));
         assertTrue((testObj).get("from").toString().equals("Martin Kyrc <martin.kyrc@gmail.com>"));
+        assertEquals(((BasicBSONList) testObj.get("mailinglist")).get(0), "linux@lists.linux.sk");
+        assertEquals((testObj.get("root")), "true");
+        assertNull(((BasicBSONList) (testObj.get("attachments"))));
 
-
-        testObj = dbClient.findMessageWithMessageId("<CAJ37LfSeBctpzD3WS7Cbm2G_uD7c-eSkcBYJ=FtVRRqXc4GWnw@mail.gmail.com>");
+        testObj = dbClient.findFirstMessageWithMessageId("<CAJ37LfSeBctpzD3WS7Cbm2G_uD7c-eSkcBYJ=FtVRRqXc4GWnw@mail.gmail.com>");
         assertTrue((testObj).get("message_id").equals("<CAJ37LfSeBctpzD3WS7Cbm2G_uD7c-eSkcBYJ=FtVRRqXc4GWnw@mail.gmail.com>"));
         assertTrue((testObj).get("from").toString().equals("Juraj Remenec <remenec@gmail.com>"));
-        BasicDBObject replyToDoc =(BasicDBObject)dbClient.findMessageWithMessageId("<d7f794ac9a203ebc1d49776968da0d61@localhost>");
+        BasicDBObject replyToDoc = (BasicDBObject) dbClient.findFirstMessageWithMessageId("<d7f794ac9a203ebc1d49776968da0d61@localhost>");
         assertTrue((testObj).get("in-reply-to").equals(replyToDoc.getString("_id")));
+        assertEquals(((BasicBSONList) testObj.get("mailinglist")).get(0), "linux@lists.linux.sk");
+        assertEquals((testObj.get("root")), replyToDoc.getString("_id"));
+        assertNull(((BasicBSONList) (testObj.get("attachments"))));
         //assertEquals(((BasicBSONList) (testObj).get("replies")).size(), 1); V principe tam su, ale nie je v In-reply-to
 
-        testObj = dbClient.findMessageWithMessageId("<4F2A6865.3030805@lavabit.com>");
+        testObj = dbClient.findFirstMessageWithMessageId("<4F2A6865.3030805@lavabit.com>");
         assertTrue((testObj).get("message_id").equals("<4F2A6865.3030805@lavabit.com>"));
+        replyToDoc = (BasicDBObject) dbClient.findFirstMessageWithMessageId("<20120127193813.GG25134@athena.platon.sk>");
+        BasicDBObject rootDoc = (BasicDBObject) dbClient.findFirstMessageWithMessageId("<CAJ37LfR9GUeEQ=EQJvvZ4BSoL489F=a2DUwAK1r4Ebb4tw=haA@mail.gmail.com>");
         assertTrue((testObj).get("from").toString().equals("rabgulo <rabgulo@lavabit.com>"));
+        assertTrue((testObj).get("in-reply-to").equals(replyToDoc.getString("_id")));
+        assertEquals((testObj.get("root")), rootDoc.getString("_id"));
+        assertEquals(((BasicBSONList) testObj.get("mailinglist")).get(0), "linux@lists.linux.sk");
+        assertNull(((BasicBSONList) (testObj.get("attachments"))));
 
-        testObj = dbClient.findMessageWithMessageId("<20120214202407.GI6838@ksp.sk>");
+        testObj = dbClient.findFirstMessageWithMessageId("<20120214202407.GI6838@ksp.sk>");
         assertTrue((testObj).get("message_id").equals("<20120214202407.GI6838@ksp.sk>"));
         assertTrue((testObj).get("from").toString().equals("Michal Petrucha <michal.petrucha@ksp.sk>"));
-        replyToDoc =(BasicDBObject)dbClient.findMessageWithMessageId("<20120203104407.GA27369@fantomas.sk>");
+        replyToDoc = (BasicDBObject) dbClient.findFirstMessageWithMessageId("<20120203104407.GA27369@fantomas.sk>");
+        rootDoc = (BasicDBObject) dbClient.findFirstMessageWithMessageId("<CAJ37LfR9GUeEQ=EQJvvZ4BSoL489F=a2DUwAK1r4Ebb4tw=haA@mail.gmail.com>");
+        assertEquals((testObj.get("root")), rootDoc.getString("_id"));
+        assertEquals(((BasicBSONList) testObj.get("mailinglist")).get(0), "linux@lists.linux.sk");
         assertTrue((testObj).get("in-reply-to").equals(replyToDoc.getString("_id")));
+        assertEquals(((BasicBSONList) (testObj.get("attachments"))).size(), 1);
+        // as we dont save the "sign"
 
-
-        testObj = dbClient.findMessageWithMessageId("<20120203104407.GA27369@fantomas.sk>");
+        testObj = dbClient.findFirstMessageWithMessageId("<20120203104407.GA27369@fantomas.sk>");
+        replyToDoc = (BasicDBObject) dbClient.findFirstMessageWithMessageId("<20120201114442.GX6838@ksp.sk>");
+        rootDoc = (BasicDBObject) dbClient.findFirstMessageWithMessageId("<CAJ37LfR9GUeEQ=EQJvvZ4BSoL489F=a2DUwAK1r4Ebb4tw=haA@mail.gmail.com>");
         assertTrue((testObj).get("message_id").equals("<20120203104407.GA27369@fantomas.sk>"));
         assertTrue((testObj).get("from").toString().equals("Matus UHLAR - fantomas <uhlar@fantomas.sk>"));
+        assertEquals(((BasicBSONList) testObj.get("mailinglist")).get(0), "linux@lists.linux.sk");
+        assertEquals((testObj.get("root")), rootDoc.getString("_id"));
+        assertTrue((testObj).get("in-reply-to").equals(replyToDoc.getString("_id")));
         assertEquals(1, ((BasicBSONList) testObj.get("replies")).size());
+        assertNull(((BasicBSONList) (testObj.get("attachments"))));
+
         writeDBItems();
 
     }
 
     @Test
-    public void testMessageReceiver() throws UnsupportedEncodingException, FileNotFoundException, IOException, MessagingException {
+    public void testMessageReceiver() throws FileNotFoundException, IOException, MessagingException {
 
-       
+
         InputStream old = System.in;
         String output;
 
@@ -145,17 +186,15 @@ public class ImportingTests {
         } finally {
             stream.close();
         }
-         InputStream testInput = new ByteArrayInputStream(output.getBytes("UTF-8"));
-         System.setIn( testInput );
-         String[] args = {mongoUrl, databaseName, String.valueOf(mongoPort),collectionName};
-         MessageReceiver.main(args);
-         assertEquals(1, dbClient.emailCount());
-         DBObject testObj = dbClient.findMessageWithMessageId("<4E7CA9DA.9040904@gmail.com>");
-         assertTrue((testObj).get("message_id").equals("<4E7CA9DA.9040904@gmail.com>"));
-         assertTrue((testObj).get("from").toString().equals("Martin Kyrc <martin.kyrc@gmail.com>"));
-         writeDBItems();
+        InputStream testInput = new ByteArrayInputStream(output.getBytes("UTF-8"));
+        System.setIn(testInput);
+        String[] args = {mongoUrl, databaseName, String.valueOf(mongoPort), collectionName};
+        MessageReceiver.main(args);
+        testInput.close();
+        assertEquals(1, dbClient.emailCount());
+        DBObject testObj = dbClient.findFirstMessageWithMessageId("<4E7CA9DA.9040904@gmail.com>");
+        assertTrue((testObj).get("message_id").equals("<4E7CA9DA.9040904@gmail.com>"));
+        assertTrue((testObj).get("from").toString().equals("Martin Kyrc <martin.kyrc@gmail.com>"));
+        writeDBItems();
     }
-
-    
-        
 }
