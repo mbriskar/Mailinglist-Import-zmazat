@@ -26,6 +26,7 @@ import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMessage;
 import mailinglist.MboxImporter;
 import mailinglist.DbClient;
+import mailinglist.MessageManager;
 import mailinglist.MessageReceiver;
 import org.bson.types.BasicBSONList;
 import org.junit.After;
@@ -69,7 +70,7 @@ public class ImportingTests {
     }
 
     @Test
-    public void testMboxNumberOfMessages() throws UnknownHostException, NoSuchProviderException, MessagingException {
+    public void testMboxNumberOfMessages() throws UnknownHostException, NoSuchProviderException, MessagingException, IOException {
         MboxImporter mbox = new MboxImporter(dbClient);
         mbox.importMbox("test/test-mails");
         assertEquals(dbClient.emailCount(), 62);
@@ -86,7 +87,8 @@ public class ImportingTests {
         message.setText("abc");
         message.addRecipient(Message.RecipientType.TO, new InternetAddress("address"));
         try {
-            dbClient.saveMessage(message);
+            MessageManager manager= new MessageManager(dbClient);
+            manager.saveMessage(manager.createMessage(message));
         }catch(IOException ex) {
             fail();
         }
@@ -112,7 +114,7 @@ public class ImportingTests {
     }
 
     @Test
-    public void testMboxMessageAttributes() throws UnknownHostException, NoSuchProviderException, MessagingException {
+    public void testMboxMessageAttributes() throws UnknownHostException, NoSuchProviderException, MessagingException, IOException {
         MboxImporter mbox = new MboxImporter(dbClient);
         mbox.importMbox("test/test-mails");
 

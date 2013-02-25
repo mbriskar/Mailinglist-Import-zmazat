@@ -15,6 +15,7 @@ import javax.mail.NoSuchProviderException;
 import javax.mail.Session;
 import javax.mail.Store;
 import javax.mail.URLName;
+import javax.mail.internet.MimeMessage;
 
 /**
  *
@@ -52,7 +53,7 @@ public class MboxImporter {
     private void importMboxDirectory(String string) {
     }
 
-    public void importMbox(String mboxPath) throws NoSuchProviderException, MessagingException {
+    public void importMbox(String mboxPath) throws NoSuchProviderException, MessagingException, IOException {
         File file = new File(mboxPath);
         String mboxFile = file.getName();
         String mboxDirectory = file.getParentFile().getAbsolutePath();
@@ -70,10 +71,11 @@ public class MboxImporter {
 
         Message[] messages = inbox.getMessages();
         System.out.println("Importing" + messages.length + "messages.");
-
+        MessageManager manager= new MessageManager(messageSaver);
         for (Message m : messages) {
             try {
-                messageSaver.saveMessage(m);
+                
+                manager.saveMessage(manager.createMessage((MimeMessage)m));
             } catch (IOException ex) {
             }
         }

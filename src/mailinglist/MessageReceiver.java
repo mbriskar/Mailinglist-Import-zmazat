@@ -30,6 +30,7 @@ public class MessageReceiver {
         } else {
             messageSaver = new DbClient();
         }
-        messageSaver.saveMessage(message);
+        MessageManager manager= new MessageManager(messageSaver);
+        manager.saveMessage(manager.createMessage(message));
     }
 }

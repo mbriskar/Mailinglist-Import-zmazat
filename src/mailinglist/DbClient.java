@@ -17,12 +17,8 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import javax.mail.Message;
 import javax.mail.MessagingException;
-import javax.mail.Multipart;
-import javax.mail.Part;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeMessage;
+import mailinglist.entities.Email;
 import org.bson.types.ObjectId;
 
 /**
@@ -32,7 +28,7 @@ import org.bson.types.ObjectId;
 public class DbClient {
 
     private static String DATABASE_PROPERTIES_FILE_NAME = "database.properties";
-    private static String MAILINGLISTS_PROPERTIES_FILE_NAME = "mailinglists.properties";
+    
     List<String> mailingLists;
     DBCollection coll;
 
@@ -58,83 +54,46 @@ public class DbClient {
         coll = db.getCollection(collectionName);
     }
 
-    public boolean saveMessage(Message m) throws MessagingException, IOException {
-        MimeMessage mime = (MimeMessage) m;
-        if (getId(mime.getMessageID(),getMailingListAddresses(mime)) != null) {
+    public boolean saveMessage(Email email) throws MessagingException, IOException {
+
+        if (getId(email.getMessageId(), email.getMailinglists()) != null) {
             return false;
         }
         BasicDBObject doc = new BasicDBObject().
-                append("message_id", mime.getMessageID()).
-                append("sent", m.getSentDate()).
-                append("received", m.getReceivedDate()).
-                append("subject", m.getSubject());
+                append("message_id", email.getMessageId()).
+                append("sent", email.getSentDate()).
+                append("subject", email.getSubject()).
+                append("from", email.getFrom());
 
-        doc.append("from", m.getFrom()[0].toString());
-
+        BasicDBObject mainContent = new BasicDBObject("type", email.getMainContent().getType()).
+                append("text", email.getMainContent().getContent());
         //getting the body =maincontent + attachements
-        List<Pair<String, String>> list = getText(m);
-        BasicDBObject mainContent = new BasicDBObject("type", list.get(0).left).
-                append("text", list.get(0).right);
-
         doc.append("mainContent", mainContent);
         List<BasicDBObject> attachments = new ArrayList<>();
-        for (int i = 1; i < list.size(); i++) {
+        for (int i = 1; i < email.getAttachments().size(); i++) {
             BasicDBObject attachment = new BasicDBObject();
-            attachment.append("type", list.get(i).left);
-            attachment.append("text", list.get(i).right);
+            attachment.append("type", email.getAttachments().get(i).getType());
+            attachment.append("text", email.getAttachments().get(i).getContent());
             attachments.add(attachment);
         }
         if (!attachments.isEmpty()) {
             doc.append("attachments", attachments);
         }
 
-
-        List<String> messageMailingList = new ArrayList<>();
-        if (m.getAllRecipients() != null) {
-
-            if (mailingLists == null) {
-                getMailingLists();
-            }
-            for (InternetAddress ad : (InternetAddress[]) m.getAllRecipients()) {
-                if (mailingLists.contains(ad.getAddress())) {
-                    messageMailingList.add(ad.getAddress());
-                }
-
-            }
-            doc.append("mailinglist", messageMailingList);
-        }
-        String parentId = "";
-        if (m.getHeader("In-Reply-To") != null) {
-            //which email is this message replying to
-            String inReplyToAddress = m.getHeader("In-Reply-To")[0];
-            parentId = getId(inReplyToAddress, messageMailingList);
-            doc.append("in-reply-to", parentId);
-            BasicDBObject parent;
-            if(parentId != null) {
-               parent= (BasicDBObject) coll.findOne(new BasicDBObject("_id", new ObjectId(parentId)));
-            
-            
-            if ( "true".equals(parent.getString("root"))) {
-                doc.append("root", parentId);
-            } else {
-                doc.append("root", parent.getString("root"));
-            } }
-        } else {
-            doc.append("root", "true");
-        }
+        doc.append("mailinglist", email.getMailinglists());
+        doc.append("in-reply-to", email.getInReplyTo());
+        doc.append("root", email.getRoot());
 
         WriteResult result = coll.insert(doc);
-
         if (!result.getLastError().ok()) {
             return false;
         }
+        
+        email.setId(doc.getString("_id"));
 
-
-        if (parentId != null && m.getHeader("In-Reply-To") != null) {
-            BasicDBObject parentObjectParams = new BasicDBObject("_id", new ObjectId(parentId));
-            BasicDBObject docToInsert = new BasicDBObject("id", doc.get("_id"));
-            BasicDBObject updateCommand = new BasicDBObject("$push", new BasicDBObject("replies", docToInsert));
-            coll.update(parentObjectParams, updateCommand);
+        //set REPLY
+        if ( email.getInReplyTo() != null) {
+            addReply(email.getInReplyTo(),email.getId());
         }
 
         return true;
@@ -144,83 +103,21 @@ public class DbClient {
     public DBCollection getColl() {
         return coll;
     }
-
-    // in future maybe in separate objects MailingListManager+ MailingList(if more attributes)
-    public List<String> getMailingLists() throws IOException {
-
-        mailingLists = new ArrayList<String>();
-        Properties prop = new Properties();
-        prop.load(DbClient.class.getClassLoader().getResourceAsStream((MAILINGLISTS_PROPERTIES_FILE_NAME)));
-        String mailinglist = "";
-        int i = 1;
-        while (mailinglist != null) {
-            mailinglist = prop.getProperty("mailinglist." + i);
-            mailingLists.add(mailinglist);
-            i++;
-        }
-
-        return mailingLists;
-
+    
+    
+    public void addReply(String parentId,String replyId) {
+        BasicDBObject parentObjectParams = new BasicDBObject("_id", new ObjectId(parentId));
+        BasicDBObject docToInsert = new BasicDBObject("id", replyId);
+        BasicDBObject updateCommand = new BasicDBObject("$push", new BasicDBObject("replies", docToInsert));
+        coll.update(parentObjectParams, updateCommand);
+    }
+    
+    public BasicDBObject getMessage(String mongoId) {
+        return (BasicDBObject) coll.findOne(new BasicDBObject("_id",new ObjectId(mongoId)));
     }
 
 
-    private List<String> getMailingListAddresses(Message m) throws MessagingException, IOException {
-        ArrayList<String> list = new ArrayList();
-        if(mailingLists == null) {getMailingLists();}
-        for (InternetAddress ad : (InternetAddress[]) m.getAllRecipients()) {
-            if (mailingLists.contains(ad.getAddress())) {
-                list.add(ad.getAddress());
-            }
-        }
-        return list;
-    }
-
-    private List<Pair<String, String>> getText(Part p) throws
-            MessagingException, IOException {
-        List<Pair<String, String>> list = new ArrayList();
-        if (p.isMimeType("text/*")) {
-            
-            String s = (String) p.getContent();
-            if (p.isMimeType("text/html")) {
-                list.add(new Pair("text/html", s));
-                return list;
-            } else {
-                 list.add(new Pair("text/plain", s));
-                return list;
-            }
-
-        }
-
-        if (p.isMimeType("multipart/alternative")) {
-            // prefer html text over plain text
-            Multipart mp = (Multipart) p.getContent();
-            String text = null;
-            for (int i = 0; i < mp.getCount(); i++) {
-                Part bp = mp.getBodyPart(i);
-                if (bp.isMimeType("text/plain")) {
-                    list.add(new Pair("alternative_text/plain", bp.getContent().toString()));
-
-                } else if (bp.isMimeType("text/html")) {
-                    list.add(new Pair("alternative_text/html", bp.getContent().toString()));
-
-                } else {
-                    list.addAll(getText(bp));
-                }
-            }
-            return list;
-        } else if (p.isMimeType("multipart/*")) {
-            Multipart mp = (Multipart) p.getContent();
-            for (int i = 0; i < mp.getCount(); i++) {
-
-                list.addAll(getText(mp.getBodyPart(i)));
-
-
-            }
-            return list;
-        }
-
-        return list;
-    }
+  
 
     public void dropTable() {
         this.coll.drop();
@@ -241,7 +138,7 @@ public class DbClient {
         List<BasicDBObject> objects = new ArrayList<>();
         try {
             while (cursor.hasNext()) {
-                objects.add((BasicDBObject)cursor.next());
+                objects.add((BasicDBObject) cursor.next());
             }
         } finally {
             cursor.close();
@@ -260,24 +157,16 @@ public class DbClient {
         return findOne.getString("_id");
     }
 
-    private class Pair<L, R> {
-
-        private final L left;
-        private final R right;
-
-        public Pair(L left, R right) {
-            this.left = left;
-            this.right = right;
+    public String getRootAttribute(String id) {
+        BasicDBObject emailObject = new BasicDBObject("_id", new ObjectId(id));
+        BasicDBObject findOne = (BasicDBObject) coll.findOne(emailObject);
+        if (findOne == null) {
+            return null;
         }
-
-        public L getLeft() {
-            return left;
-        }
-
-        public R getRight() {
-            return right;
-        }
+        return findOne.getString("root");
     }
+
+
 }
 //        if (!(m.getContent() instanceof String)) {
 //            Multipart multipart = (Multipart) m.getContent();
