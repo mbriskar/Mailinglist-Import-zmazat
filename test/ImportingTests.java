@@ -124,6 +124,8 @@ public class ImportingTests {
         assertEquals(((BasicBSONList) testObj.get("mailinglist")).get(0), "linux@lists.linux.sk");
         assertEquals((testObj.get("root")), "true");
         assertNull(((BasicBSONList) (testObj.get("attachments"))));
+        assertEquals("text/plain",((BasicDBObject)testObj.get("mainContent")).get("type"));
+        assertTrue(((BasicDBObject)testObj.get("mainContent")).get("text").toString().startsWith("ahojte,"));
 
         testObj = dbClient.findFirstMessageWithMessageId("<CAJ37LfSeBctpzD3WS7Cbm2G_uD7c-eSkcBYJ=FtVRRqXc4GWnw@mail.gmail.com>");
         assertTrue((testObj).get("message_id").equals("<CAJ37LfSeBctpzD3WS7Cbm2G_uD7c-eSkcBYJ=FtVRRqXc4GWnw@mail.gmail.com>"));
@@ -133,6 +135,8 @@ public class ImportingTests {
         assertEquals(((BasicBSONList) testObj.get("mailinglist")).get(0), "linux@lists.linux.sk");
         assertEquals((testObj.get("root")), replyToDoc.getString("_id"));
         assertNull(((BasicBSONList) (testObj.get("attachments"))));
+        assertEquals("text/plain",((BasicDBObject)testObj.get("mainContent")).get("type"));
+        assertTrue(((BasicDBObject)testObj.get("mainContent")).get("text").toString().startsWith("Kedysika"));
         //assertEquals(((BasicBSONList) (testObj).get("replies")).size(), 1); V principe tam su, ale nie je v In-reply-to
 
         testObj = dbClient.findFirstMessageWithMessageId("<4F2A6865.3030805@lavabit.com>");
@@ -144,6 +148,8 @@ public class ImportingTests {
         assertEquals((testObj.get("root")), rootDoc.getString("_id"));
         assertEquals(((BasicBSONList) testObj.get("mailinglist")).get(0), "linux@lists.linux.sk");
         assertNull(((BasicBSONList) (testObj.get("attachments"))));
+        assertEquals("text/plain",((BasicDBObject)testObj.get("mainContent")).get("type"));
+        assertTrue(((BasicDBObject)testObj.get("mainContent")).get("text").toString().startsWith("On 27.01.2012 20:38"));
 
         testObj = dbClient.findFirstMessageWithMessageId("<20120214202407.GI6838@ksp.sk>");
         assertTrue((testObj).get("message_id").equals("<20120214202407.GI6838@ksp.sk>"));
@@ -154,6 +160,8 @@ public class ImportingTests {
         assertEquals(((BasicBSONList) testObj.get("mailinglist")).get(0), "linux@lists.linux.sk");
         assertTrue((testObj).get("in-reply-to").equals(replyToDoc.getString("_id")));
         assertEquals(((BasicBSONList) (testObj.get("attachments"))).size(), 1);
+        assertEquals("text/plain",((BasicDBObject)testObj.get("mainContent")).get("type"));
+        assertTrue(((BasicDBObject)testObj.get("mainContent")).get("text").toString().startsWith("On Fri, Feb 03, 2012 at "));
         // as we dont save the "sign"
 
         testObj = dbClient.findFirstMessageWithMessageId("<20120203104407.GA27369@fantomas.sk>");
@@ -166,6 +174,8 @@ public class ImportingTests {
         assertTrue((testObj).get("in-reply-to").equals(replyToDoc.getString("_id")));
         assertEquals(1, ((BasicBSONList) testObj.get("replies")).size());
         assertNull(((BasicBSONList) (testObj.get("attachments"))));
+        assertEquals("text/plain",((BasicDBObject)testObj.get("mainContent")).get("type"));
+        assertTrue(((BasicDBObject)testObj.get("mainContent")).get("text").toString().startsWith("On 01.02.12 12:44"));
 
         writeDBItems();
 

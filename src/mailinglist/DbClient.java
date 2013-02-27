@@ -56,7 +56,7 @@ public class DbClient {
 
     public boolean saveMessage(Email email) throws MessagingException, IOException {
 
-        if (getId(email.getMessageId(), email.getMailinglists()) != null) {
+        if (getId(email.getMessageId(), email.getMessageMailingLists()) != null) {
             return false;
         }
         BasicDBObject doc = new BasicDBObject().
@@ -70,7 +70,7 @@ public class DbClient {
         //getting the body =maincontent + attachements
         doc.append("mainContent", mainContent);
         List<BasicDBObject> attachments = new ArrayList<>();
-        for (int i = 1; i < email.getAttachments().size(); i++) {
+        for (int i = 0; i < email.getAttachments().size(); i++) {
             BasicDBObject attachment = new BasicDBObject();
             attachment.append("type", email.getAttachments().get(i).getType());
             attachment.append("text", email.getAttachments().get(i).getContent());

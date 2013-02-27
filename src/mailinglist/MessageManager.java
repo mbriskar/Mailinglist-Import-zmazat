@@ -4,13 +4,10 @@
  */
 package mailinglist;
 
-import com.mongodb.BasicDBObject;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Properties;
-import javax.mail.Message;
 import javax.mail.MessagingException;
 import javax.mail.Multipart;
 import javax.mail.Part;
@@ -52,12 +49,11 @@ public class MessageManager {
             email.setInReplyTo(inReplyTo);
         }
         email.setFrom(message.getFrom()[0].toString());
-        List<MessageManager.Pair<String, String>> list = getText(message);
+        List<ContentPart> list = getContentParts(message);
         email.setSubject(message.getSubject());
-        email.setMainContent(new ContentPart(list.get(0).left, list.get(0).right));
-        for (int i = 1; i <= list.size(); i++) {
-            ContentPart cp = new ContentPart(list.get(0).left, list.get(0).right);
-            email.addAttachment(cp);
+        email.setMainContent(list.get(0));
+        for (int i = 1; i < list.size(); i++) {
+            email.addAttachment(list.get(i));
         }
         for (InternetAddress ad : (InternetAddress[]) message.getAllRecipients()) {
             if (mailingLists.contains(ad.getAddress())) {
@@ -92,17 +88,19 @@ public class MessageManager {
         return true;
     }
     
-    private List<MessageManager.Pair<String, String>> getText(Part p) throws
+    private List<ContentPart> getContentParts(Part p) throws
             MessagingException, IOException {
-        List<MessageManager.Pair<String, String>> list = new ArrayList<MessageManager.Pair<String, String>>();
+        List<ContentPart> list = new ArrayList<ContentPart>();
         if (p.isMimeType("text/*")) {
 
             String s = (String) p.getContent();
             if (p.isMimeType("text/html")) {
-                list.add(new MessageManager.Pair("text/html", s));
+                ContentPart cp= new ContentPart("text/html", s);
+                list.add(cp);
                 return list;
             } else {
-                list.add(new MessageManager.Pair("text/plain", s));
+                ContentPart cp= new ContentPart("text/plain", s);
+                list.add(cp);
                 return list;
             }
 
@@ -115,13 +113,16 @@ public class MessageManager {
             for (int i = 0; i < mp.getCount(); i++) {
                 Part bp = mp.getBodyPart(i);
                 if (bp.isMimeType("text/plain")) {
-                    list.add(new MessageManager.Pair("alternative_text/plain", bp.getContent().toString()));
+                     ContentPart cp= new ContentPart("alternative_text/plain", bp.getContent().toString());
+                     list.add(cp);
+                    
 
                 } else if (bp.isMimeType("text/html")) {
-                    list.add(new MessageManager.Pair("alternative_text/html", bp.getContent().toString()));
+                    ContentPart cp= new ContentPart("alternative_text/html", bp.getContent().toString());
+                    list.add(cp);
 
                 } else {
-                    list.addAll(getText(bp));
+                    list.addAll(getContentParts(bp));
                 }
             }
             return list;
@@ -129,7 +130,7 @@ public class MessageManager {
             Multipart mp = (Multipart) p.getContent();
             for (int i = 0; i < mp.getCount(); i++) {
 
-                list.addAll(getText(mp.getBodyPart(i)));
+                list.addAll(getContentParts(mp.getBodyPart(i)));
 
 
             }
@@ -139,26 +140,5 @@ public class MessageManager {
         return list;
     }
 
-   
-
-    
-        private class Pair<L, R> {
-
-        private final L left;
-        private final R right;
-
-        public Pair(L left, R right) {
-            this.left = left;
-            this.right = right;
-        }
-
-        public L getLeft() {
-            return left;
-        }
-
-        public R getRight() {
-            return right;
-        }
-    }
     
 }
