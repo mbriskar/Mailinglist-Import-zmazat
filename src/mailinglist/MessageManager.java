@@ -21,13 +21,14 @@ import mailinglist.entities.Email;
  * @author matej
  */
 public class MessageManager {
+
     private DbClient dbClient;
     private final ArrayList<String> mailingLists;
     private static String MAILINGLISTS_PROPERTIES_FILE_NAME = "mailinglists.properties";
-    
+
     public MessageManager(DbClient dbClient) throws IOException {
-        this.dbClient= dbClient;
-        
+        this.dbClient = dbClient;
+
         mailingLists = new ArrayList<String>();
         Properties prop = new Properties();
         prop.load(DbClient.class.getClassLoader().getResourceAsStream((MAILINGLISTS_PROPERTIES_FILE_NAME)));
@@ -39,13 +40,13 @@ public class MessageManager {
             i++;
         }
     }
-    
+
     public Email createMessage(MimeMessage message) throws MessagingException, IOException {
-        Email email=new Email();
+        Email email = new Email();
         email.setMessageId(message.getMessageID());
         email.setSentDate(message.getSentDate());
         if (message.getHeader("In-Reply-To") != null) {
-            String inReplyTo=dbClient.getId(message.getHeader("In-Reply-To")[0], mailingLists);
+            String inReplyTo = dbClient.getId(message.getHeader("In-Reply-To")[0], mailingLists);
             email.setInReplyTo(inReplyTo);
         }
         email.setFrom(message.getFrom()[0].toString());
@@ -62,32 +63,27 @@ public class MessageManager {
 
         }
         //setRoot
-        
-             
-         
-        
-        if(email.getInReplyTo() != null) {
-            String root=dbClient.getRootAttribute(email.getInReplyTo());
-            if("true".equals(root)) {
-                 email.setRoot(email.getInReplyTo());
-             } else{
-                 email.setRoot(root);
-             }
+
+        if (email.getInReplyTo() != null) {
+            String root = dbClient.getRootAttribute(email.getInReplyTo());
+            if ("true".equals(root)) {
+                email.setRoot(email.getInReplyTo());
+            } else {
+                email.setRoot(root);
+            }
         } else {
             email.setRoot("true");
         }
 
         return email;
-        
+
     }
-    
+
     public boolean saveMessage(Email message) throws MessagingException, IOException {
         dbClient.saveMessage(message);
-
-        
         return true;
     }
-    
+
     private List<ContentPart> getContentParts(Part p) throws
             MessagingException, IOException {
         List<ContentPart> list = new ArrayList<ContentPart>();
@@ -95,11 +91,15 @@ public class MessageManager {
 
             String s = (String) p.getContent();
             if (p.isMimeType("text/html")) {
-                ContentPart cp= new ContentPart("text/html", s);
+                ContentPart cp = new ContentPart();
+                cp.setType("text/html");
+                cp.setContent(s);
                 list.add(cp);
                 return list;
             } else {
-                ContentPart cp= new ContentPart("text/plain", s);
+                ContentPart cp = new ContentPart();
+                cp.setType("text/plain");
+                cp.setContent(s);
                 list.add(cp);
                 return list;
             }
@@ -113,14 +113,15 @@ public class MessageManager {
             for (int i = 0; i < mp.getCount(); i++) {
                 Part bp = mp.getBodyPart(i);
                 if (bp.isMimeType("text/plain")) {
-                     ContentPart cp= new ContentPart("alternative_text/plain", bp.getContent().toString());
-                     list.add(cp);
-                    
-
-                } else if (bp.isMimeType("text/html")) {
-                    ContentPart cp= new ContentPart("alternative_text/html", bp.getContent().toString());
+                    ContentPart cp = new ContentPart();
+                    cp.setType("alternative_text/plain");
+                    cp.setContent(bp.getContent().toString());
                     list.add(cp);
-
+                } else if (bp.isMimeType("text/html")) {
+                    ContentPart cp = new ContentPart();
+                    cp.setType("alternative_text/html");
+                    cp.setContent(bp.getContent().toString());
+                    list.add(cp);
                 } else {
                     list.addAll(getContentParts(bp));
                 }
@@ -129,16 +130,11 @@ public class MessageManager {
         } else if (p.isMimeType("multipart/*")) {
             Multipart mp = (Multipart) p.getContent();
             for (int i = 0; i < mp.getCount(); i++) {
-
                 list.addAll(getContentParts(mp.getBodyPart(i)));
-
-
             }
             return list;
         }
 
         return list;
     }
-
-    
 }

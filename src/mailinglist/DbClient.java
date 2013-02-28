@@ -9,9 +9,9 @@ import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
+import com.mongodb.Mongo;
 import com.mongodb.MongoClient;
 import com.mongodb.WriteConcern;
-import com.mongodb.WriteResult;
 import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
@@ -48,6 +48,7 @@ public class DbClient {
     }
 
     private void connect(String mongoUrl, String databaseName, int mongoPort, String collectionName) throws UnknownHostException {
+       
         MongoClient mongoClient = new MongoClient(mongoUrl, mongoPort);
         DB db = mongoClient.getDB(databaseName);
         mongoClient.setWriteConcern(WriteConcern.SAFE);
@@ -58,66 +59,25 @@ public class DbClient {
 
         if (getId(email.getMessageId(), email.getMessageMailingLists()) != null) {
             return false;
-        }
-        BasicDBObject doc = new BasicDBObject().
-                append("message_id", email.getMessageId()).
-                append("sent", email.getSentDate()).
-                append("subject", email.getSubject()).
-                append("from", email.getFrom());
-
-        BasicDBObject mainContent = new BasicDBObject("type", email.getMainContent().getType()).
-                append("text", email.getMainContent().getContent());
-        //getting the body =maincontent + attachements
-        doc.append("mainContent", mainContent);
-        List<BasicDBObject> attachments = new ArrayList<>();
-        for (int i = 0; i < email.getAttachments().size(); i++) {
-            BasicDBObject attachment = new BasicDBObject();
-            attachment.append("type", email.getAttachments().get(i).getType());
-            attachment.append("text", email.getAttachments().get(i).getContent());
-            attachments.add(attachment);
-        }
-        if (!attachments.isEmpty()) {
-            doc.append("attachments", attachments);
-        }
-
-        doc.append("mailinglist", email.getMailinglists());
-        doc.append("in-reply-to", email.getInReplyTo());
-        doc.append("root", email.getRoot());
-
-        WriteResult result = coll.insert(doc);
-        if (!result.getLastError().ok()) {
-            return false;
-        }
-        
-        email.setId(doc.getString("_id"));
-
-        //set REPLY
+        } 
+        coll.insert(email);
         if ( email.getInReplyTo() != null) {
-            addReply(email.getInReplyTo(),email.getId());
+            coll.setObjectClass(Email.class);
+            Email parent =(Email)coll.findOne(new ObjectId(email.getInReplyTo()));
+            parent.addReply(email.getId());
+            coll.save(parent);
         }
-
-        return true;
-
-    }
-
+         return true;
+        }
+       
     public DBCollection getColl() {
         return coll;
-    }
-    
-    
-    public void addReply(String parentId,String replyId) {
-        BasicDBObject parentObjectParams = new BasicDBObject("_id", new ObjectId(parentId));
-        BasicDBObject docToInsert = new BasicDBObject("id", replyId);
-        BasicDBObject updateCommand = new BasicDBObject("$push", new BasicDBObject("replies", docToInsert));
-        coll.update(parentObjectParams, updateCommand);
     }
     
     public BasicDBObject getMessage(String mongoId) {
         return (BasicDBObject) coll.findOne(new BasicDBObject("_id",new ObjectId(mongoId)));
     }
 
-
-  
 
     public void dropTable() {
         this.coll.drop();
@@ -133,12 +93,13 @@ public class DbClient {
 
     }
 
-    public List<BasicDBObject> getAllEmails() {
+    public List<Email> getAllEmails() {
+        coll.setObjectClass(Email.class);
         DBCursor cursor = coll.find();
-        List<BasicDBObject> objects = new ArrayList<>();
+        List<Email> objects = new ArrayList<>();
         try {
             while (cursor.hasNext()) {
-                objects.add((BasicDBObject) cursor.next());
+                objects.add((Email) cursor.next());
             }
         } finally {
             cursor.close();
@@ -146,9 +107,12 @@ public class DbClient {
         return objects;
     }
 
-    public String getId(String messageId, List<String> mailinglistOneCommon) {
+    public String getId(String messageId, ArrayList<String> mailinglistOneCommon) {
         BasicDBObject emailObject = new BasicDBObject("message_id", messageId);
         BasicDBObject mailingListQuery = new BasicDBObject("$in", mailinglistOneCommon);
+        if(mailinglistOneCommon == null) {
+            mailinglistOneCommon= new ArrayList<String>();
+        }
         emailObject.put("mailinglist", mailingListQuery);
         BasicDBObject findOne = (BasicDBObject) coll.findOne(emailObject);
         if (findOne == null) {
@@ -168,32 +132,3 @@ public class DbClient {
 
 
 }
-//        if (!(m.getContent() instanceof String)) {
-//            Multipart multipart = (Multipart) m.getContent();
-//            List attachments = new ArrayList();
-//            List bodies = new ArrayList();
-//
-//            for (int x = 0; x < multipart.getCount(); x++) {
-//                BodyPart bodyPart = multipart.getBodyPart(x);
-//                String disposition = bodyPart.getDisposition();
-//
-//                if (disposition != null && (disposition.equals(BodyPart.ATTACHMENT))) {
-//                    BasicDBObject attachment = new BasicDBObject("type",bodyPart.getContentType()).
-//                            append("attachment",bodyPart.getContent().toString());
-//                    attachments.add(attachment);
-//
-//                } else {
-//                    BasicDBObject body =new BasicDBObject("type",bodyPart.getContentType()).
-//                            append("body",bodyPart.getContent().toString());
-//                    bodies.add(body);
-//                }
-//            }
-//            if (!bodies.isEmpty()) {
-//                doc.append("content", bodies);
-//            }
-//            if (!attachments.isEmpty()) {
-//                doc.append("attachment", attachments);
-//            }
-//        } else {
-//            doc.append("content", m.getContent().toString());
-//        }

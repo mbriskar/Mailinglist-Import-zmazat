@@ -10,29 +10,26 @@ import com.mongodb.BasicDBObject;
  *
  * @author matej
  */
-public class ContentPart {
-    private String type;
-    private String content;
+public class ContentPart extends BasicDBObject{
 
-    public ContentPart(String type, String content) {
-        this.type=type;
-        this.content=content;
+    public ContentPart() {
+
     }
 
     public String getType() {
-        return type;
+        return getString("type");
     }
 
     public void setType(String type) {
-        this.type = type;
+        put("type", type);
     }
 
     public String getContent() {
-        return content;
+        return getString("text");
     }
 
     public void setContent(String content) {
-        this.content = content;
+        put("text", content);
     }
     
 }
