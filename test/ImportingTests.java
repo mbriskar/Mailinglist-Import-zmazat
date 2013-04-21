@@ -27,6 +27,7 @@ import javax.mail.internet.MimeMessage;
 import mailinglist.importing.MboxImporter;
 import mailinglist.DbClient;
 import mailinglist.MessageManager;
+import mailinglist.entities.ContentPart;
 import mailinglist.importing.MessageReceiver;
 import mailinglist.entities.Email;
 import org.bson.types.BasicBSONList;
@@ -83,12 +84,14 @@ public class ImportingTests {
 
     @Test
     public void testSaveMessage() throws AddressException, MessagingException {
+        final String address = "address";
+        final String text = "abc";
         MimeMessage message = new MimeMessage(Session.getDefaultInstance(new Properties()));
-        message.setFrom(new InternetAddress("address"));
-        message.setText("abc");
-        message.setHeader("Message-ID", "abc");
+        message.setFrom(new InternetAddress(address));
+        message.setText(text);
+        message.setHeader("Message-ID", text);
         message.setRecipient(Message.RecipientType.TO, new InternetAddress("linux@lists.linux.sk"));
-        message.addRecipient(Message.RecipientType.TO, new InternetAddress("address"));
+        message.addRecipient(Message.RecipientType.TO, new InternetAddress(address));
         try {
             MessageManager manager= new MessageManager(dbClient);
             manager.saveMessage(manager.createMessage(message));
@@ -96,6 +99,12 @@ public class ImportingTests {
             fail();
         }
         assertEquals(1, dbClient.emailCount());
+        Email email=(Email) dbClient.findFirstMessageWithMessageId(text);
+        ContentPart cp= email.getMainContent();
+        assertEquals(text,email.getMainContent().getContent());
+        assertEquals(text,email.getMessageId());
+        assertEquals(address,email.getFrom());
+        
 
     }
 
@@ -168,6 +177,7 @@ public class ImportingTests {
         // as we dont save the "sign"
 
         testObj = dbClient.findFirstMessageWithMessageId("<20120203104407.GA27369@fantomas.sk>");
+         
         replyToDoc = (BasicDBObject) dbClient.findFirstMessageWithMessageId("<20120201114442.GX6838@ksp.sk>");
         rootDoc = (BasicDBObject) dbClient.findFirstMessageWithMessageId("<CAJ37LfR9GUeEQ=EQJvvZ4BSoL489F=a2DUwAK1r4Ebb4tw=haA@mail.gmail.com>");
         assertTrue((testObj).get(Email.MESSAGE_ID_MONGO_TAG).equals("<20120203104407.GA27369@fantomas.sk>"));

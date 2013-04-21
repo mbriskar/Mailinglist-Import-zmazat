@@ -7,6 +7,7 @@ package mailinglist.entities;
 import com.mongodb.BasicDBObject;
 import java.util.ArrayList;
 import java.util.Date;
+import javax.naming.Reference;
 
 
 

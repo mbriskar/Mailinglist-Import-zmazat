@@ -33,9 +33,10 @@ public class MboxImporter {
     public static void main(String[] args) throws NoSuchProviderException, MessagingException, IOException {
         DbClient msgSaver = new DbClient();
         MboxImporter mbox = new MboxImporter(msgSaver);
-        File file = new File(args[0]);
+        
 
         if (args.length == 1) {
+            File file = new File(args[0]);
             if (file.isDirectory()) {
                 mbox.importMboxDirectory(args[0]);
             } else {
@@ -43,6 +44,7 @@ public class MboxImporter {
             }
 
         } else {
+            
             System.out.println("Call the method with one parameter (mbox path)");
         }
 
@@ -61,10 +63,6 @@ public class MboxImporter {
         String mboxDirectory = file.getParentFile().getAbsolutePath();
         Properties props = new Properties();
         props.setProperty("mstor.mbox.metadataStrategy", "none");
-        props.setProperty("mail.store.protocol", "mstor");
-        props.setProperty("mstor.mbox.cacheBuffers", "disabled");
-        props.setProperty("mstor.mbox.bufferStrategy", "mapped");
-        props.setProperty("mstor.metadata", "disabled");
         Session session = Session.getDefaultInstance(props);
         Store store = session.getStore(new URLName("mstor:" + mboxDirectory));
         store.connect();

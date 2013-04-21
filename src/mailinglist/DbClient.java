@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import javax.mail.MessagingException;
+import mailinglist.entities.ContentPart;
 import mailinglist.entities.Email;
 import org.bson.types.ObjectId;
 
@@ -53,6 +54,14 @@ public class DbClient {
         DB db = mongoClient.getDB(databaseName);
         mongoClient.setWriteConcern(WriteConcern.SAFE);
         coll = db.getCollection(collectionName);
+        coll.setObjectClass(Email.class);
+        coll.setInternalClass(Email.MAIN_CONTENT_MONGO_TAG, ContentPart.class);
+        coll.setInternalClass(Email.ATTACHMENTS_MONGO_TAG + ".0" , ContentPart.class);
+        coll.setInternalClass(Email.ATTACHMENTS_MONGO_TAG + ".1" , ContentPart.class);
+        coll.setInternalClass(Email.ATTACHMENTS_MONGO_TAG + ".2" , ContentPart.class);
+        coll.setInternalClass(Email.ATTACHMENTS_MONGO_TAG + ".3" , ContentPart.class);
+        coll.setInternalClass(Email.ATTACHMENTS_MONGO_TAG + ".4" , ContentPart.class);
+        coll.setInternalClass(Email.ATTACHMENTS_MONGO_TAG + ".5" , ContentPart.class);
     }
 
     public boolean saveMessage(Email email) throws MessagingException, IOException {
@@ -62,7 +71,7 @@ public class DbClient {
         } 
         coll.insert(email);
         if ( email.getInReplyTo() != null) {
-            coll.setObjectClass(Email.class);
+
             Email parent =(Email)coll.findOne(new ObjectId(email.getInReplyTo()));
             parent.addReply(email.getId());
             coll.save(parent);
@@ -95,6 +104,7 @@ public class DbClient {
 
     public List<Email> getAllEmails() {
         coll.setObjectClass(Email.class);
+         
         DBCursor cursor = coll.find();
         List<Email> objects = new ArrayList<>();
         try {
